@@ -1,0 +1,92 @@
+package pjatk.sri.zajec2.rest;
+
+import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import pjatk.sri.zajec2.dto.EmployeeDto;
+import pjatk.sri.zajec2.dto.mapper.EmployeeDtoMapper;
+import pjatk.sri.zajec2.model.Employee;
+import pjatk.sri.zajec2.repository.EmployeeRepository;
+
+import javax.validation.Valid;
+import java.net.URI;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/employees")
+@RequiredArgsConstructor
+public class EmployeeController {
+    private final EmployeeRepository employeeRepository;
+    private final ModelMapper modelMapper;
+    private final EmployeeDtoMapper employeeDtoMapper;
+
+
+    @GetMapping
+    public ResponseEntity<Collection<EmployeeDto>> getEmployees() {
+        List<Employee> allEmployees = employeeRepository.findAll();
+        List<EmployeeDto> result = allEmployees.stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+        return new ResponseEntity<>(result, HttpStatus.OK);
+    }
+
+    @GetMapping("/{empId}")
+    public ResponseEntity<EmployeeDto>
+    getEmployeeById(@PathVariable Long empId) {
+        Optional<Employee> emp = employeeRepository.findById(empId);
+        if (emp.isPresent()) {
+            EmployeeDto employeeDto = convertToDto(emp.get());
+            return new ResponseEntity<>(employeeDto, HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>(null, HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @PostMapping
+    public ResponseEntity saveNewEmployee(@Valid @RequestBody EmployeeDto emp) {
+        Employee entity = convertToEntity(emp);
+        employeeRepository.save(entity);
+        HttpHeaders headers = new HttpHeaders();
+        URI location = ServletUriComponentsBuilder
+                .fromCurrentRequest()
+                .path("/{id}")
+                .buildAndExpand(entity.getId())
+                .toUri();
+        headers.add("Location", location.toString());
+        return new ResponseEntity(headers, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{empId}")
+    public ResponseEntity updateEmployee(@Valid @PathVariable Long empId, @RequestBody EmployeeDto employeeDto) {
+        Optional<Employee> currentEmp = employeeRepository.findById(empId);
+        if (currentEmp.isPresent()) {
+            employeeDto.setId(empId);
+            Employee entity = convertToEntity(employeeDto);
+            employeeRepository.save(entity);
+            return new ResponseEntity(HttpStatus.NO_CONTENT);
+        } else {
+            return new ResponseEntity(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @DeleteMapping("/{empId}")
+    public ResponseEntity deleteEmployee(@PathVariable Long empId) {
+        employeeRepository.deleteById(empId);
+        return new ResponseEntity(HttpStatus.NO_CONTENT);
+    }
+
+    private EmployeeDto convertToDto(Employee e) {
+        return modelMapper.map(e, EmployeeDto.class);
+    }
+
+    private Employee convertToEntity(EmployeeDto dto) {
+        return modelMapper.map(dto, Employee.class);
+    }
+}
